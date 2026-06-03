@@ -1,0 +1,5 @@
+node_modules/
+dist/
+server/data/dev-db.json
+*.log
+verification-*.png
