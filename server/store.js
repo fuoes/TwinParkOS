@@ -17,6 +17,32 @@ function persist(data) {
   fs.writeFileSync(databaseFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
+export function migrateStoreData(data) {
+  const seed = createSeedData();
+  let changed = false;
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { data: seed, changed: true };
+  }
+
+  for (const [key, value] of Object.entries(seed)) {
+    if (data[key] === undefined || data[key] === null) {
+      data[key] = value;
+      changed = true;
+    }
+  }
+
+  const previousVersion = Number(data.meta?.version || 0);
+  if (previousVersion < seed.meta.version) {
+    data.meta = { ...seed.meta, ...(data.meta || {}), version: seed.meta.version };
+    data.energyOverview = { ...seed.energyOverview, ...(data.energyOverview || {}) };
+    data.simulator = { ...seed.simulator, ...(data.simulator || {}) };
+    changed = true;
+  }
+
+  return { data, changed };
+}
+
 function load() {
   ensureDataDirectory();
   if (!fs.existsSync(databaseFile)) {
@@ -24,7 +50,10 @@ function load() {
     persist(data);
     return data;
   }
-  return JSON.parse(fs.readFileSync(databaseFile, 'utf8'));
+  const loaded = JSON.parse(fs.readFileSync(databaseFile, 'utf8'));
+  const migrated = migrateStoreData(loaded);
+  if (migrated.changed) persist(migrated.data);
+  return migrated.data;
 }
 
 export const store = load();
