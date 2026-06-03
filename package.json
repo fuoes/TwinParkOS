@@ -10,6 +10,7 @@
     "dev:full": "concurrently -k -n API,WEB -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
     "start:api": "node server/index.js",
     "reset:dev-data": "node server/reset-dev-data.js",
+    "test:api": "node server/api-smoke-test.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },

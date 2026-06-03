@@ -5,7 +5,7 @@ const hash = (value) => bcrypt.hashSync(value, 10);
 export function createSeedData() {
   return {
     meta: {
-      version: 1,
+      version: 2,
       parkName: '科创产业园',
       lastPersistedAt: new Date().toISOString()
     },
@@ -20,19 +20,33 @@ export function createSeedData() {
         id: 'role-operator',
         name: '运营管理人员',
         menus: ['dashboard', 'twin', 'devices', 'energy', 'security', 'environment', 'workorders', 'enterprise', 'space', 'alarms', 'reports'],
-        permissions: ['dashboard:read', 'device:read', 'energy:read', 'alarm:read', 'alarm:manage', 'workorder:read', 'workorder:manage', 'enterprise:read', 'space:read']
+        permissions: ['dashboard:read', 'device:read', 'device:manage', 'energy:read', 'energy:manage', 'security:read', 'security:manage', 'environment:read', 'environment:manage', 'alarm:read', 'alarm:manage', 'workorder:read', 'workorder:manage', 'enterprise:read', 'enterprise:manage', 'space:read', 'space:manage', 'report:read']
       },
       {
         id: 'role-engineer',
         name: '物业运维人员',
         menus: ['dashboard', 'twin', 'devices', 'environment', 'workorders', 'alarms'],
-        permissions: ['dashboard:read', 'device:read', 'alarm:read', 'workorder:read', 'workorder:manage']
+        permissions: ['dashboard:read', 'device:read', 'device:manage', 'environment:read', 'alarm:read', 'workorder:read', 'workorder:manage']
+      },
+      {
+        id: 'role-security',
+        name: '安防值班人员',
+        menus: ['dashboard', 'twin', 'security', 'workorders', 'alarms'],
+        permissions: ['dashboard:read', 'security:read', 'security:manage', 'alarm:read', 'alarm:manage', 'workorder:read', 'workorder:manage']
+      },
+      {
+        id: 'role-energy',
+        name: '能源管理人员',
+        menus: ['dashboard', 'twin', 'energy', 'environment', 'alarms', 'reports'],
+        permissions: ['dashboard:read', 'energy:read', 'energy:manage', 'environment:read', 'alarm:read', 'alarm:manage', 'report:read']
       }
     ],
     users: [
       { id: 'user-admin', username: 'admin', name: '平台管理员', passwordHash: hash('admin123'), roleId: 'role-admin', department: '信息化管理部', enabled: true },
       { id: 'user-operator', username: 'operator', name: '运营中心', passwordHash: hash('operator123'), roleId: 'role-operator', department: '运营服务部', enabled: true },
-      { id: 'user-engineer', username: 'engineer', name: '刘工', passwordHash: hash('engineer123'), roleId: 'role-engineer', department: '物业工程部', enabled: true }
+      { id: 'user-engineer', username: 'engineer', name: '刘工', passwordHash: hash('engineer123'), roleId: 'role-engineer', department: '物业工程部', enabled: true },
+      { id: 'user-security', username: 'security', name: '安防值班员', passwordHash: hash('security123'), roleId: 'role-security', department: '安防管理部', enabled: true },
+      { id: 'user-energy', username: 'energy', name: '能源管理员', passwordHash: hash('energy123'), roleId: 'role-energy', department: '能源管理部', enabled: true }
     ],
     buildings: [
       { id: 'building-a1', name: 'A1 创新研发楼', enterprises: 28, occupancy: 94, energy: 4280, alarms: 3, health: 96, floors: 12 },
@@ -99,6 +113,79 @@ export function createSeedData() {
       waterToday: 612,
       carbonToday: 11.7,
       energyPerSquareMeter: 0.42
+    },
+    inspections: [
+      { id: 'INS-260603-001', name: '配电房日常巡检', object: 'A1 配电设备', area: 'A1 B1 配电房', cycle: '每日', owner: '陈工', status: '进行中', nextRun: '今日 16:00', completion: 68 },
+      { id: 'INS-260603-002', name: '消防设施月度巡检', object: '烟感、消防栓', area: 'B2 智造厂房', cycle: '每月', owner: '消控室', status: '未开始', nextRun: '06-05 09:00', completion: 0 },
+      { id: 'INS-260603-003', name: '环境传感器巡检', object: '环境设备', area: '全园区', cycle: '每周', owner: '王工', status: '已完成', nextRun: '06-10 10:00', completion: 100 }
+    ],
+    maintenancePlans: [
+      { id: 'MNT-260603-001', name: '冷却泵季度保养', device: 'B2 冷却泵 P-02', cycle: '每季度', owner: '刘工', dueDate: '2026-06-12', status: '待执行' },
+      { id: 'MNT-260603-002', name: '电梯半年度维保', device: 'A1 客梯 1#', cycle: '每半年', owner: '维保单位', dueDate: '2026-06-20', status: '待执行' },
+      { id: 'MNT-260603-003', name: '摄像头清洁保养', device: '园区摄像头', cycle: '每月', owner: '安防班', dueDate: '2026-06-08', status: '进行中' }
+    ],
+    energyBills: [
+      { id: 'BILL-2605-001', enterprise: '云启智能科技', period: '2026-05', electricity: 12840, water: 186, amount: 14620, paid: 14620, status: '已支付' },
+      { id: 'BILL-2605-002', enterprise: '芯联微电子', period: '2026-05', electricity: 28640, water: 412, amount: 32880, paid: 32880, status: '已支付' },
+      { id: 'BILL-2605-003', enterprise: '智衡机器人', period: '2026-05', electricity: 16220, water: 205, amount: 18360, paid: 0, status: '待支付' },
+      { id: 'BILL-2605-004', enterprise: '绿源储能', period: '2026-05', electricity: 11280, water: 138, amount: 12940, paid: 4000, status: '部分支付' }
+    ],
+    cameras: [
+      { id: 'CAM-001', name: '东门岗球机', area: '园区东入口', online: '在线', stream: '正常', storage: '正常', preset: '入口全景' },
+      { id: 'CAM-002', name: 'B2 厂房西侧', area: 'B2 西侧道路', online: '在线', stream: '正常', storage: '正常', preset: '周界' },
+      { id: 'CAM-003', name: 'A1 大堂', area: 'A1 1F 大堂', online: '在线', stream: '正常', storage: '正常', preset: '大堂' },
+      { id: 'CAM-004', name: '能源站', area: '能源站', online: '在线', stream: '正常', storage: '正常', preset: '设备区' }
+    ],
+    accessRecords: [
+      { id: 'ACC-260603-001', person: '张立', enterprise: '云启智能科技', gate: '东门岗', direction: '入园', time: '08:42', result: '通过' },
+      { id: 'ACC-260603-002', person: '李敏', enterprise: '芯联微电子', gate: 'B2 南门', direction: '入楼', time: '08:46', result: '通过' },
+      { id: 'ACC-260603-003', person: '未知访客', enterprise: '-', gate: '东门岗', direction: '入园', time: '09:08', result: '拒绝' }
+    ],
+    vehicles: [
+      { id: 'VEH-001', plate: '粤B·A1234', owner: '云启智能科技', type: '固定车辆', entryTime: '08:31', status: '在园', parking: 'P1-028' },
+      { id: 'VEH-002', plate: '粤B·C6688', owner: '芯联微电子', type: '固定车辆', entryTime: '08:36', status: '在园', parking: 'P1-106' },
+      { id: 'VEH-003', plate: '粤A·V2031', owner: '访客车辆', type: '临时车辆', entryTime: '09:12', status: '在园', parking: 'P2-018' }
+    ],
+    visitors: [
+      { id: 'VIS-260603-001', name: '王先生', phone: '138****1024', enterprise: '云启智能科技', visitTime: '2026-06-03 10:00', reason: '商务洽谈', plate: '粤A·V2031', status: '已入园' },
+      { id: 'VIS-260603-002', name: '赵女士', phone: '139****6672', enterprise: '智衡机器人', visitTime: '2026-06-03 14:00', reason: '项目交流', plate: '-', status: '待到访' },
+      { id: 'VIS-260603-003', name: '陈先生', phone: '136****9811', enterprise: '芯联微电子', visitTime: '2026-06-04 09:30', reason: '设备交付', plate: '粤B·D8890', status: '待审批' }
+    ],
+    environmentThresholds: [
+      { id: 'THR-TEMP', metric: '温度', warning: '> 30℃', alarm: '> 35℃', enabled: true },
+      { id: 'THR-CO2', metric: 'CO₂', warning: '> 1000 ppm', alarm: '> 1500 ppm', enabled: true },
+      { id: 'THR-PM25', metric: 'PM2.5', warning: '> 75 μg/m³', alarm: '> 115 μg/m³', enabled: true },
+      { id: 'THR-NOISE', metric: '噪声', warning: '> 65 dB', alarm: '> 75 dB', enabled: true }
+    ],
+    serviceRequests: [
+      { id: 'SR-260603-001', enterprise: '云启智能科技', type: '会议室预约', title: 'A1 多功能会议室预约', applicant: '张立', status: '已通过', createdAt: '2026-06-03 08:40' },
+      { id: 'SR-260603-002', enterprise: '智衡机器人', type: '装修申请', title: 'C3 602 展厅改造', applicant: '李经理', status: '待审批', createdAt: '2026-06-03 09:16' },
+      { id: 'SR-260603-003', enterprise: '绿源储能', type: '网络开通', title: 'D4 203 专线开通', applicant: '周工', status: '处理中', createdAt: '2026-06-03 09:28' }
+    ],
+    announcements: [
+      { id: 'ANN-260603-001', title: '园区夏季消防安全检查通知', category: '安全通知', audience: '全园区', publishAt: '2026-06-03 08:00', status: '已发布', readRate: '86%' },
+      { id: 'ANN-260602-002', title: 'A1 楼宇计划停电通知', category: '停水停电', audience: 'A1 企业', publishAt: '2026-06-02 16:30', status: '已发布', readRate: '94%' }
+    ],
+    contracts: [
+      { id: 'CT-2025-001', enterprise: '云启智能科技', rooms: 'A1 801-806', area: 1480, startDate: '2025-01-01', endDate: '2027-12-31', rent: 68, propertyFee: 8, status: '执行中' },
+      { id: 'CT-2024-016', enterprise: '芯联微电子', rooms: 'B2 301-318', area: 5260, startDate: '2024-07-01', endDate: '2028-06-30', rent: 52, propertyFee: 6, status: '执行中' },
+      { id: 'CT-2024-027', enterprise: '智衡机器人', rooms: 'C3 501-508', area: 1860, startDate: '2024-09-01', endDate: '2026-08-31', rent: 62, propertyFee: 7, status: '即将到期' }
+    ],
+    alarmRules: [
+      { id: 'RULE-FIRE-001', name: '消防火警联动', source: '消防设备', condition: '烟感或温感触发', level: '一级严重', actions: '三维定位、视频联动、生成工单', enabled: true },
+      { id: 'RULE-HVAC-001', name: '冷却泵高温告警', source: '暖通设备', condition: '轴温 > 75℃ 持续 5 分钟', level: '二级紧急', actions: '通知物业、生成工单', enabled: true },
+      { id: 'RULE-ENERGY-001', name: '非工作时间高能耗', source: '能耗表计', condition: '高于历史均值 20%', level: '三级一般', actions: '通知能源管理员', enabled: true }
+    ],
+    auditLogs: [
+      { id: 'LOG-001', user: '平台管理员', action: '登录系统', module: '认证', detail: '管理员登录运营中心', time: '2026-06-03 08:30' },
+      { id: 'LOG-002', user: '运营中心', action: '查看驾驶舱', module: '首页', detail: '查看园区运行态势', time: '2026-06-03 08:35' }
+    ],
+    simulator: {
+      enabled: true,
+      speed: 1,
+      autoAlarm: false,
+      scenario: '日常运营',
+      lastScenarioAt: null
     }
   };
 }
