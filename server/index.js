@@ -73,7 +73,13 @@ function formatDateTime(date = new Date()) {
 
 function makeId(prefix, collection) {
   const date = new Date().toISOString().slice(2, 10).replaceAll('-', '');
-  const sequence = String(collection.length + 1).padStart(3, '0');
+  const base = `${prefix}-${date}-`;
+  const highestSequence = collection.reduce((highest, item) => {
+    if (!item?.id?.startsWith(base)) return highest;
+    const sequence = Number(item.id.slice(base.length));
+    return Number.isInteger(sequence) ? Math.max(highest, sequence) : highest;
+  }, 0);
+  const sequence = String(highestSequence + 1).padStart(3, '0');
   return `${prefix}-${date}-${sequence}`;
 }
 

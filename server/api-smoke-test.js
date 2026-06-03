@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+
 const baseUrl = process.env.API_BASE_URL || 'http://localhost:3001';
 
 async function request(path, options = {}, token) {
@@ -54,6 +56,19 @@ const created = await request('/api/resources/enterprises', {
   })
 }, token);
 
+const retained = await request('/api/resources/enterprises', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: '接口测试保留企业',
+    industry: '软件服务',
+    building: 'A1',
+    rooms: '902',
+    area: 180,
+    status: '在驻',
+    bill: '正常'
+  })
+}, token);
+
 await request(`/api/resources/enterprises/${created.item.id}`, {
   method: 'PATCH',
   body: JSON.stringify({ status: '即将到期' })
@@ -76,6 +91,21 @@ await expectFailure(`/api/workorders/${engineerOrder.item.id}`, {
 }, engineerToken, 400);
 
 await request(`/api/resources/enterprises/${created.item.id}`, { method: 'DELETE' }, token);
+const afterDelete = await request('/api/resources/enterprises', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: '接口测试重建企业',
+    industry: '软件服务',
+    building: 'A1',
+    rooms: '903',
+    area: 160,
+    status: '在驻',
+    bill: '正常'
+  })
+}, token);
+assert.notEqual(afterDelete.item.id, retained.item.id, '删除后新建资源不应复用仍在使用的 ID');
+await request(`/api/resources/enterprises/${retained.item.id}`, { method: 'DELETE' }, token);
+await request(`/api/resources/enterprises/${afterDelete.item.id}`, { method: 'DELETE' }, token);
 await request(`/api/devices/${bootstrap.devices[0].id}/control`, {
   method: 'POST',
   body: JSON.stringify({ action: 'recover' })
@@ -90,5 +120,5 @@ console.log(JSON.stringify({
   deviceStatus: controlled.item.status,
   scenario: scenario.item.name,
   reportBytes: report.length,
-  boundaries: ['unauthenticated', 'role-permission', 'workorder-transition']
+  boundaries: ['unauthenticated', 'role-permission', 'workorder-transition', 'resource-id-uniqueness']
 }, null, 2));
