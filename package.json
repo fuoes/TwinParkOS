@@ -11,6 +11,7 @@
     "start:api": "node server/index.js",
     "reset:dev-data": "node server/reset-dev-data.js",
     "test:api": "node server/api-smoke-test.js",
+    "test:e2e": "node tests/e2e-smoke.mjs",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },

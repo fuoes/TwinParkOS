@@ -15,14 +15,31 @@ async function request(path, options = {}, token) {
   return payload;
 }
 
+async function expectFailure(path, options, token, status) {
+  try {
+    await request(path, options, token);
+    throw new Error(`${options.method || 'GET'} ${path}: expected ${status}`);
+  } catch (error) {
+    if (!error.message.includes(`: ${status} `)) throw error;
+  }
+}
+
+await expectFailure('/api/bootstrap', {}, undefined, 401);
+
 const login = await request('/api/auth/login', {
   method: 'POST',
   body: JSON.stringify({ username: 'admin', password: 'admin123' })
 });
 const token = login.token;
+const engineerLogin = await request('/api/auth/login', {
+  method: 'POST',
+  body: JSON.stringify({ username: 'engineer', password: 'engineer123' })
+});
+const engineerToken = engineerLogin.token;
 
 const health = await request('/api/health');
 const bootstrap = await request('/api/bootstrap', {}, token);
+await expectFailure('/api/users', {}, engineerToken, 403);
 
 const created = await request('/api/resources/enterprises', {
   method: 'POST',
@@ -49,18 +66,29 @@ const controlled = await request(`/api/devices/${bootstrap.devices[0].id}/contro
 
 const scenario = await request('/api/simulator/scenarios/energy-spike', { method: 'POST', body: '{}' }, token);
 const report = await request('/api/reports/devices/export', {}, token);
+const engineerOrder = await request('/api/workorders', {
+  method: 'POST',
+  body: JSON.stringify({ title: '接口边界测试工单', type: '设备故障', location: '测试区域' })
+}, engineerToken);
+await expectFailure(`/api/workorders/${engineerOrder.item.id}`, {
+  method: 'PATCH',
+  body: JSON.stringify({ status: '已完成' })
+}, engineerToken, 400);
 
 await request(`/api/resources/enterprises/${created.item.id}`, { method: 'DELETE' }, token);
 await request(`/api/devices/${bootstrap.devices[0].id}/control`, {
   method: 'POST',
   body: JSON.stringify({ action: 'recover' })
 }, token);
+await request('/api/system/reset-demo', { method: 'POST', body: '{}' }, token);
 
 console.log(JSON.stringify({
   health: health.status,
   user: login.user.name,
+  engineer: engineerLogin.user.name,
   resources: Object.keys(bootstrap).length,
   deviceStatus: controlled.item.status,
   scenario: scenario.item.name,
-  reportBytes: report.length
+  reportBytes: report.length,
+  boundaries: ['unauthenticated', 'role-permission', 'workorder-transition']
 }, null, 2));

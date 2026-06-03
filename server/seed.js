@@ -68,10 +68,79 @@ export function createSeedData() {
       { id: 'ALM-20260602-015', type: '门禁', level: '三级一般', source: '东门岗', location: '园区东入口', status: '未确认', time: '09:08', action: '查看记录', description: '访客凭证连续验证失败', deviceId: 'DEV-CAM-118' }
     ],
     workorders: [
-      { id: 'WO-260602-082', title: '冷却泵轴温异常核查', type: '设备故障', source: '系统告警', location: '能源站', priority: '紧急', status: '处理中', owner: '刘工', sla: '10:20', alarmId: 'ALM-20260602-017', createdAt: '2026-06-02T09:34:00+08:00' },
-      { id: 'WO-260602-081', title: 'B2 3F 烟感告警确认', type: '消防告警', source: '告警中心', location: 'B2 3F', priority: '严重', status: '待处理', owner: '消控室', sla: '09:57', alarmId: 'ALM-20260602-018', createdAt: '2026-06-02T09:43:00+08:00' },
-      { id: 'WO-260602-080', title: 'C3 中庭传感器离线', type: '环境异常', source: '系统告警', location: 'C3 1F', priority: '一般', status: '待派单', owner: '未分配', sla: '13:20', createdAt: '2026-06-02T09:20:00+08:00' },
-      { id: 'WO-260602-079', title: 'A1 8F 会议室照明报修', type: '企业报修', source: '企业提交', location: 'A1 8F', priority: '一般', status: '待验收', owner: '赵工', sla: '明日 12:00', createdAt: '2026-06-02T08:45:00+08:00' }
+      {
+        id: 'WO-260602-082',
+        title: '冷却泵轴温异常核查',
+        type: '设备故障',
+        source: '系统告警',
+        location: '能源站',
+        priority: '紧急',
+        status: '处理中',
+        owner: '刘工',
+        sla: '10:20',
+        alarmId: 'ALM-20260602-017',
+        description: '冷却泵 P-02 轴温连续 5 分钟高于 75℃，需要现场检查润滑与散热状态。',
+        createdAt: '2026-06-02T09:34:00+08:00',
+        timeline: [
+          { status: '待派单', user: '系统', time: '2026-06-02 09:34', note: '由设备高温告警自动生成' },
+          { status: '待处理', user: '物业主管', time: '2026-06-02 09:36', note: '派单给刘工' },
+          { status: '处理中', user: '刘工', time: '2026-06-02 09:40', note: '已到达能源站开始核查' }
+        ]
+      },
+      {
+        id: 'WO-260602-081',
+        title: 'B2 3F 烟感告警确认',
+        type: '消防告警',
+        source: '告警中心',
+        location: 'B2 3F',
+        priority: '严重',
+        status: '待处理',
+        owner: '消控室',
+        sla: '09:57',
+        alarmId: 'ALM-20260602-018',
+        description: 'B2 智造厂房 3F 西区烟感触发，需要联动视频并现场确认。',
+        createdAt: '2026-06-02T09:43:00+08:00',
+        timeline: [
+          { status: '待派单', user: '系统', time: '2026-06-02 09:43', note: '由消防火警自动生成' },
+          { status: '待处理', user: '安防值班员', time: '2026-06-02 09:44', note: '已派发至消控室' }
+        ]
+      },
+      {
+        id: 'WO-260602-080',
+        title: 'C3 中庭传感器离线',
+        type: '环境异常',
+        source: '系统告警',
+        location: 'C3 1F',
+        priority: '一般',
+        status: '待派单',
+        owner: '未分配',
+        sla: '13:20',
+        description: 'C3 中庭 CO₂ 传感器超过一个采集周期未上报数据。',
+        createdAt: '2026-06-02T09:20:00+08:00',
+        timeline: [
+          { status: '待派单', user: '系统', time: '2026-06-02 09:20', note: '由数据中断告警自动生成' }
+        ]
+      },
+      {
+        id: 'WO-260602-079',
+        title: 'A1 8F 会议室照明报修',
+        type: '企业报修',
+        source: '企业提交',
+        location: 'A1 8F',
+        priority: '一般',
+        status: '待验收',
+        owner: '赵工',
+        sla: '明日 12:00',
+        description: 'A1 8F 会议室部分照明无法开启。',
+        result: '已更换故障驱动电源，照明恢复正常。',
+        createdAt: '2026-06-02T08:45:00+08:00',
+        timeline: [
+          { status: '待派单', user: '云启智能科技', time: '2026-06-02 08:45', note: '企业提交报修' },
+          { status: '待处理', user: '物业主管', time: '2026-06-02 08:50', note: '派单给赵工' },
+          { status: '处理中', user: '赵工', time: '2026-06-02 09:05', note: '已到场检查照明回路' },
+          { status: '待验收', user: '赵工', time: '2026-06-02 09:35', note: '维修完成，等待企业验收' }
+        ]
+      }
     ],
     enterprises: [
       { id: 'ent-cloud', name: '云启智能科技', building: 'A1', rooms: '801-806', area: 1480, industry: '人工智能', status: '在驻', bill: '正常' },

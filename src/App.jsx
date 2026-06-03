@@ -33,6 +33,7 @@ import {
   MapPinned,
   Maximize2,
   Menu,
+  Minimize2,
   MonitorCog,
   Plus,
   Play,
@@ -152,16 +153,80 @@ function App() {
   const [selected, setSelected] = useState(buildingStats[0]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [layers, setLayers] = useState(layerDefaults);
+  const [globalQuery, setGlobalQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
   const [realtimeStatus, setRealtimeStatus] = useState('offline');
   const [toast, setToast] = useState(null);
-  const [, setRevision] = useState(0);
+  const [revision, setRevision] = useState(0);
   const visibleNavItems = useMemo(
     () => navItems.filter((item) => !user?.menus?.length || user.menus.includes(item.id)),
     [user]
   );
   const activeItem = navItems.find((item) => item.id === active);
+  const globalSearchItems = useMemo(() => {
+    const allowedTargets = new Set(visibleNavItems.map((item) => item.id));
+    return [
+      ...buildingStats.map((item) => ({
+        id: item.id || item.name,
+        type: '楼栋',
+        label: item.name,
+        detail: `${item.floors} 层 · 出租率 ${item.occupancy}%`,
+        target: 'twin',
+        building: item,
+        icon: Building2
+      })),
+      ...devices.map((item) => ({
+        id: item.id,
+        type: '设备',
+        label: item.name,
+        detail: `${item.id} · ${item.area} · ${item.status}`,
+        target: 'devices',
+        icon: Cpu
+      })),
+      ...enterprises.map((item) => ({
+        id: item.id || item.name,
+        type: '企业',
+        label: item.name,
+        detail: `${item.building} · ${item.rooms} · ${item.status}`,
+        target: 'enterprise',
+        icon: Users
+      })),
+      ...roomAssets.map((item) => ({
+        id: item.id || item.room,
+        type: '房间',
+        label: item.room,
+        detail: `${item.enterprise} · ${item.state} · ${item.area}`,
+        target: 'space',
+        icon: MapPinned
+      })),
+      ...realtimeAlarms.map((item) => ({
+        id: item.id,
+        type: '告警',
+        label: `${item.type} · ${item.source}`,
+        detail: `${item.location} · ${item.level} · ${item.status}`,
+        target: 'alarms',
+        icon: Bell
+      })),
+      ...workorders.map((item) => ({
+        id: item.id,
+        type: '工单',
+        label: item.title,
+        detail: `${item.location} · ${item.priority} · ${item.status}`,
+        target: 'workorders',
+        icon: ClipboardList
+      }))
+    ].filter((item) => allowedTargets.has(item.target));
+  }, [revision, visibleNavItems]);
+  const globalResults = useMemo(() => {
+    const query = globalQuery.trim().toLowerCase();
+    if (!query) return [];
+    return globalSearchItems
+      .filter((item) => `${item.type} ${item.label} ${item.detail} ${item.id}`.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [globalQuery, globalSearchItems]);
 
   const refreshData = useCallback(async () => {
     const payload = await getBootstrap();
@@ -199,6 +264,12 @@ function App() {
     }, setRealtimeStatus);
   }, [refreshData, user]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   async function handleLogin(username, password) {
     const nextUser = await login(username, password);
     await refreshData();
@@ -210,6 +281,22 @@ function App() {
     clearToken();
     setRealtimeStatus('offline');
     setUser(null);
+  }
+
+  function openSearchResult(item) {
+    if (item.building) setSelected(item.building);
+    setActive(item.target);
+    setGlobalQuery('');
+    setSearchFocused(false);
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (error) {
+      notify(error.message || '浏览器未允许进入全屏', 'danger');
+    }
   }
 
   const notify = useCallback((message, tone = 'good') => {
@@ -289,10 +376,46 @@ function App() {
             <h1>{activeItem?.label}</h1>
           </div>
           <div className="topbar-actions">
-            <label className="search-box">
-              <Search size={16} />
-              <input placeholder="搜索企业、设备、房间、告警" />
-            </label>
+            <div
+              className="global-search"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false);
+              }}
+            >
+              <label className="search-box">
+                <Search size={16} />
+                <input
+                  value={globalQuery}
+                  onChange={(event) => setGlobalQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && globalResults[0]) openSearchResult(globalResults[0]);
+                    if (event.key === 'Escape') {
+                      setGlobalQuery('');
+                      setSearchFocused(false);
+                    }
+                  }}
+                  placeholder="搜索企业、设备、房间、告警"
+                />
+              </label>
+              {searchFocused && globalQuery.trim() && (
+                <div className="search-results">
+                  {globalResults.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button key={`${item.type}-${item.id}`} onClick={() => openSearchResult(item)}>
+                        <Icon size={16} />
+                        <span>
+                          <strong>{item.label}</strong>
+                          <small>{item.type} · {item.detail}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {!globalResults.length && <p>未找到匹配的园区数据</p>}
+                </div>
+              )}
+            </div>
             <StatusPill icon={CloudSun} label="26℃ 多云" />
             <StatusPill icon={Bell} label={`${realtimeAlarms.length} 条告警`} tone="warn" />
             <StatusPill
@@ -300,8 +423,8 @@ function App() {
               label={realtimeStatus === 'online' ? '实时在线' : '实时离线'}
               tone={realtimeStatus === 'online' ? 'online' : 'offline'}
             />
-            <button className="icon-button" aria-label="全屏">
-              <Maximize2 size={18} />
+            <button className="icon-button" onClick={toggleFullscreen} aria-label={isFullscreen ? '退出全屏' : '全屏'} title={isFullscreen ? '退出全屏' : '全屏'}>
+              {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
             <div className="user-chip">
               <UserRound size={17} />
@@ -326,11 +449,11 @@ function App() {
           )}
           {active === 'devices' && <DevicesPage />}
           {active === 'energy' && <EnergyPage />}
-          {active === 'security' && <SecurityPage />}
+          {active === 'security' && <SecurityPage setActive={setActive} />}
           {active === 'environment' && <EnvironmentPage />}
           {active === 'workorders' && <WorkOrdersPage />}
           {active === 'enterprise' && <EnterprisePage />}
-          {active === 'space' && <SpacePage />}
+          {active === 'space' && <SpacePage setActive={setActive} />}
           {active === 'alarms' && (
             <AlarmsPage
               setActive={setActive}
@@ -460,7 +583,7 @@ function DashboardPage({ setActive, setSelected }) {
 
       <section className="dashboard-main">
         <div className="panel panel-large">
-          <PanelTitle icon={MapPinned} title="园区空间总览" action="楼栋详情" />
+          <PanelTitle icon={MapPinned} title="园区空间总览" action="楼栋详情" onAction={() => setActive('twin')} />
           <ParkMiniMap
             onSelect={(building) => {
               setSelected(building);
@@ -469,26 +592,26 @@ function DashboardPage({ setActive, setSelected }) {
           />
         </div>
         <div className="panel">
-          <PanelTitle icon={AlertTriangle} title="实时告警" action="全部" />
-          <AlarmList compact />
+          <PanelTitle icon={AlertTriangle} title="实时告警" action="全部" onAction={() => setActive('alarms')} />
+          <AlarmList compact onOpen={() => setActive('alarms')} />
         </div>
         <div className="panel">
-          <PanelTitle icon={ClipboardList} title="待办工单" action="派单" />
+          <PanelTitle icon={ClipboardList} title="待办工单" action="派单" onAction={() => setActive('workorders')} />
           <WorkorderMiniList />
         </div>
       </section>
 
       <section className="bottom-grid">
         <div className="panel">
-          <PanelTitle icon={Zap} title="今日能耗趋势" action="报表" />
+          <PanelTitle icon={Zap} title="今日能耗趋势" action="报表" onAction={() => setActive('reports')} />
           <TrendChart mode="energy" />
         </div>
         <div className="panel">
-          <PanelTitle icon={Gauge} title="设备健康排行" action="监控" />
+          <PanelTitle icon={Gauge} title="设备健康排行" action="监控" onAction={() => setActive('devices')} />
           <HealthRanking />
         </div>
         <div className="panel">
-          <PanelTitle icon={BarChart3} title="运营闭环趋势" action="分析" />
+          <PanelTitle icon={BarChart3} title="运营闭环趋势" action="分析" onAction={() => setActive('reports')} />
           <TrendChart mode="mixed" />
         </div>
       </section>
@@ -496,14 +619,14 @@ function DashboardPage({ setActive, setSelected }) {
   );
 }
 
-function PanelTitle({ icon: Icon, title, action }) {
+function PanelTitle({ icon: Icon, title, action, onAction }) {
   return (
     <div className="panel-title">
       <div>
         <Icon size={18} />
         <h3>{title}</h3>
       </div>
-      {action && <button>{action}</button>}
+      {action && onAction && <button onClick={onAction}>{action}</button>}
     </div>
   );
 }
@@ -534,7 +657,7 @@ function ParkMiniMap({ onSelect }) {
   );
 }
 
-function AlarmList({ compact = false, onAcknowledge, onCreateOrder, onClose }) {
+function AlarmList({ compact = false, onAcknowledge, onCreateOrder, onClose, onOpen }) {
   return (
     <div className="stack-list">
       {realtimeAlarms.slice(0, compact ? 4 : realtimeAlarms.length).map((alarm) => (
@@ -545,7 +668,7 @@ function AlarmList({ compact = false, onAcknowledge, onCreateOrder, onClose }) {
             <span>{alarm.location} · {alarm.time} · {alarm.status}</span>
           </div>
           {compact ? (
-            <button>{alarm.action}</button>
+            <button onClick={() => onOpen?.(alarm)}>{alarm.action}</button>
           ) : (
             <div className="row-actions">
               <button onClick={() => onAcknowledge?.(alarm.id)} disabled={alarm.status === '已确认'}>确认</button>
@@ -617,24 +740,91 @@ function HealthRanking() {
 }
 
 function TwinPage({ layers, setLayers, selected, setSelected, setActive }) {
+  const { perform, notify } = useRuntime();
+  const [showLayers, setShowLayers] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
+  const [sceneQuery, setSceneQuery] = useState('');
+  const [nightMode, setNightMode] = useState(true);
+  const [timePosition, setTimePosition] = useState(9);
+  const [playing, setPlaying] = useState(false);
+  const sceneMatches = buildingStats.filter((building) => building.name.toLowerCase().includes(sceneQuery.trim().toLowerCase()));
+
+  useEffect(() => {
+    if (!playing) return undefined;
+    const timer = window.setInterval(() => {
+      setTimePosition((value) => (value >= 24 ? 0 : value + 1));
+    }, 800);
+    return () => window.clearInterval(timer);
+  }, [playing]);
+
+  function locateBuilding(building) {
+    if (!building) {
+      notify('未找到匹配楼栋', 'danger');
+      return;
+    }
+    setSelected(building);
+    setSceneQuery(building.name);
+    setShowSearch(false);
+    notify(`已定位 ${building.name}`);
+  }
+
+  async function createBuildingWorkorder() {
+    const building = selected || buildingStats[0];
+    const result = await perform(() => createWorkorder({
+      title: `${building.name}运行状态核查`,
+      type: '巡检异常',
+      source: '数字孪生一张图',
+      location: building.name,
+      priority: building.alarms > 3 ? '紧急' : '一般',
+      owner: '未分配',
+      sla: building.alarms > 3 ? '12 小时' : '48 小时',
+      description: '由三维场景发起的楼栋运行状态核查工单。'
+    }), '楼栋核查工单已生成');
+    if (result) setActive('workorders');
+  }
+
   return (
-    <div className="twin-page">
+    <div className={`twin-page ${nightMode ? 'night-mode' : 'day-mode'}`}>
       <div className="scene-toolbar">
         <button onClick={() => setActive('dashboard')}>
           <Home size={16} /> 返回首页
         </button>
-        <button>
+        <button className={showLayers ? 'active' : ''} onClick={() => setShowLayers((value) => !value)}>
           <Layers size={16} /> 图层控制
         </button>
-        <button>
+        <button className={showSearch ? 'active' : ''} onClick={() => setShowSearch((value) => !value)}>
           <Search size={16} /> 搜索定位
         </button>
-        <button>
-          <MonitorCog size={16} /> 夜间模式
+        <button className={nightMode ? 'active' : ''} onClick={() => setNightMode((value) => !value)}>
+          <MonitorCog size={16} /> {nightMode ? '日间模式' : '夜间模式'}
         </button>
       </div>
 
-      <div className="layer-panel">
+      {showSearch && (
+        <form
+          className="scene-search-panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            locateBuilding(sceneMatches[0]);
+          }}
+        >
+          <label>
+            <Search size={16} />
+            <input autoFocus value={sceneQuery} onChange={(event) => setSceneQuery(event.target.value)} placeholder="输入楼栋名称或编号" />
+          </label>
+          <div>
+            {(sceneQuery.trim() ? sceneMatches : buildingStats).slice(0, 4).map((building) => (
+              <button type="button" key={building.id || building.name} onClick={() => locateBuilding(building)}>
+                <Building2 size={15} />
+                <span>{building.name}</span>
+                <small>{building.floors}F</small>
+              </button>
+            ))}
+          </div>
+        </form>
+      )}
+
+      {showLayers && <div className={`layer-panel ${showSearch ? 'with-search' : ''}`}>
         <h3>图层</h3>
         {[
           ['building', '建筑图层', Building2],
@@ -655,9 +845,9 @@ function TwinPage({ layers, setLayers, selected, setSelected, setActive }) {
             <span>{label}</span>
           </label>
         ))}
-      </div>
+      </div>}
 
-      <ThreeParkScene layers={layers} onSelect={setSelected} />
+      <ThreeParkScene layers={layers} onSelect={setSelected} focusedBuilding={selected} nightMode={nightMode} />
 
       <aside className="object-panel">
         <p className="eyebrow">选中对象</p>
@@ -679,26 +869,34 @@ function TwinPage({ layers, setLayers, selected, setSelected, setActive }) {
           <button onClick={() => setActive('energy')}>
             <Zap size={16} /> 查看能耗
           </button>
-          <button onClick={() => setActive('workorders')}>
+          <button onClick={createBuildingWorkorder}>
             <Send size={16} /> 生成工单
           </button>
         </div>
       </aside>
 
       <div className="timeline-panel">
+        <button className={playing ? 'active' : ''} onClick={() => setPlaying((value) => !value)} aria-label={playing ? '暂停历史回放' : '开始历史回放'}>
+          <Play size={15} />
+        </button>
         <span>00:00</span>
-        <div className="timeline">
-          <i style={{ left: '18%' }} />
-          <i style={{ left: '52%' }} />
-          <i style={{ left: '73%' }} />
-        </div>
+        <input
+          type="range"
+          min="0"
+          max="24"
+          step="1"
+          value={timePosition}
+          onChange={(event) => setTimePosition(Number(event.target.value))}
+          aria-label="历史回放时间"
+        />
+        <strong>{String(timePosition).padStart(2, '0')}:00</strong>
         <span>24:00</span>
       </div>
     </div>
   );
 }
 
-function ThreeParkScene({ layers, onSelect }) {
+function ThreeParkScene({ layers, onSelect, focusedBuilding, nightMode }) {
   const hostRef = useRef(null);
   const sceneStateRef = useRef(null);
   const layersRef = useRef(layers);
@@ -720,6 +918,14 @@ function ThreeParkScene({ layers, onSelect }) {
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+
+  useEffect(() => {
+    sceneStateRef.current?.focusBuilding?.(focusedBuilding);
+  }, [focusedBuilding]);
+
+  useEffect(() => {
+    sceneStateRef.current?.setNightMode?.(nightMode);
+  }, [nightMode]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -851,14 +1057,33 @@ function ThreeParkScene({ layers, onSelect }) {
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const drag = { active: false, x: 0, y: 0, yaw: 0.68, pitch: 0.62, radius: 48 };
+    const drag = { active: false, x: 0, y: 0, yaw: 0.68, pitch: 0.62, radius: 48, target: new THREE.Vector3(0, 2.8, 0) };
 
     const updateCamera = () => {
       const x = Math.sin(drag.yaw) * drag.radius;
       const z = Math.cos(drag.yaw) * drag.radius;
       const y = Math.sin(drag.pitch) * drag.radius * 0.66 + 8;
-      camera.position.set(x, y, z);
-      camera.lookAt(0, 2.8, 0);
+      camera.position.set(drag.target.x + x, y, drag.target.z + z);
+      camera.lookAt(drag.target);
+    };
+    const focusBuilding = (building) => {
+      if (!building) return;
+      const mesh = buildingMeshes.find((item) => item.userData?.building?.name === building.name);
+      if (!mesh) return;
+      drag.target.set(mesh.position.x, Math.max(2.8, mesh.position.y * 0.45), mesh.position.z);
+      drag.radius = 30;
+      updateCamera();
+    };
+    const setNightMode = (enabled) => {
+      const background = enabled ? '#071018' : '#b7d8e3';
+      scene.background.set(background);
+      scene.fog.color.set(background);
+      ambient.color.set(enabled ? '#a9ddff' : '#ffffff');
+      ambient.groundColor.set(enabled ? '#26353d' : '#6f8d78');
+      ambient.intensity = enabled ? 1.25 : 1.8;
+      keyLight.intensity = enabled ? 1.55 : 2.2;
+      ground.material.color.set(enabled ? '#12242b' : '#5e8171');
+      roadMaterial.color.set(enabled ? '#273038' : '#667078');
     };
     updateCamera();
 
@@ -908,10 +1133,12 @@ function ThreeParkScene({ layers, onSelect }) {
     renderer.domElement.addEventListener('click', handleClick);
     window.addEventListener('resize', handleResize);
 
-    sceneStateRef.current = { groups };
+    sceneStateRef.current = { groups, focusBuilding, setNightMode };
     Object.entries(layersRef.current).forEach(([key, visible]) => {
       if (groups[key]) groups[key].visible = visible;
     });
+    setNightMode(nightMode);
+    focusBuilding(focusedBuilding);
 
     let frameId;
     const clock = new THREE.Clock();
@@ -1096,11 +1323,11 @@ function EnergyPage() {
       <TabStrip active={tab} onChange={setTab} tabs={[{ id: 'overview', label: '能耗总览' }, { id: 'bills', label: '费用账单', count: energyBills.length }]} />
       {tab === 'overview' && <section className="split-grid">
         <div className="panel">
-          <PanelTitle icon={BarChart3} title="分时用电趋势" action="明细" />
+          <PanelTitle icon={BarChart3} title="分时用电趋势" action="账单明细" onAction={() => setTab('bills')} />
           <TrendChart mode="energy" />
         </div>
         <div className="panel">
-          <PanelTitle icon={Building2} title="楼栋能耗排行" action="对比" />
+          <PanelTitle icon={Building2} title="楼栋能耗排行" action="导出" onAction={() => perform(() => downloadReport('energy'), '能耗报表已导出')} />
           <div className="ranking">
             {energyRanking.map((item) => (
               <div key={item.name}>
@@ -1141,8 +1368,9 @@ function DropletIcon(props) {
   return <CloudSun {...props} />;
 }
 
-function SecurityPage() {
+function SecurityPage({ setActive }) {
   const [tab, setTab] = useState('video');
+  const [videoLayout, setVideoLayout] = useState(4);
   const { perform } = useRuntime();
   return (
     <ModuleScaffold
@@ -1161,20 +1389,32 @@ function SecurityPage() {
       ]} />
       {tab === 'video' && <section className="security-grid">
         <div className="panel video-panel">
-          <PanelTitle icon={Camera} title="视频监控" action="16 分屏" />
-          <div className="video-wall">
-            {cameras.slice(0, 4).map((camera, index) => (
-              <div className="video-cell" key={camera.id}>
-                <Camera size={28} />
-                <span>{camera.name}</span>
-                <i>LIVE</i>
-                <div className={`scan-line s-${index}`} />
-              </div>
-            ))}
+          <div className="video-panel-head">
+            <PanelTitle icon={Camera} title="视频监控" />
+            <div className="video-layout-control" aria-label="视频分屏">
+              {[1, 4, 9, 16].map((count) => (
+                <button className={videoLayout === count ? 'active' : ''} key={count} onClick={() => setVideoLayout(count)}>
+                  {count}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={`video-wall layout-${videoLayout}`}>
+            {Array.from({ length: videoLayout }).map((_, index) => {
+              const camera = cameras[index];
+              return (
+                <div className={`video-cell ${camera ? '' : 'empty'}`} key={camera?.id || `empty-${index}`}>
+                  <Camera size={videoLayout > 4 ? 20 : 28} />
+                  <span>{camera?.name || '空闲窗口'}</span>
+                  {camera && <i>LIVE</i>}
+                  {camera && <div className={`scan-line s-${index % 4}`} />}
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="panel">
-          <PanelTitle icon={DoorOpen} title="门禁与车辆" action="记录" />
+          <PanelTitle icon={DoorOpen} title="门禁与车辆" action="通行记录" onAction={() => setTab('access')} />
           <div className="summary-stack">
             <SummaryInline icon={DoorOpen} label="今日通行" value="2,418 人次" />
             <SummaryInline icon={Car} label="当前车位" value="124 个空余" />
@@ -1184,7 +1424,7 @@ function SecurityPage() {
         </div>
       </section>}
       {tab === 'video' && <section className="panel">
-        <PanelTitle icon={Flame} title="消防与周界告警处置" action="应急预案" />
+        <PanelTitle icon={Flame} title="消防与周界告警处置" action="告警中心" onAction={() => setActive('alarms')} />
         <ProcessFlow
           steps={['接收告警', '三维定位', '视频联动', '人员确认', '派发任务', '处置归档']}
           activeIndex={3}
@@ -1224,7 +1464,7 @@ function EnvironmentPage() {
       ]} />
       {tab === 'overview' && <section className="split-grid">
         <div className="panel">
-          <PanelTitle icon={MapPinned} title="环境热力分布" action="CO₂" />
+          <PanelTitle icon={MapPinned} title="环境热力分布" action="阈值配置" onAction={() => setTab('thresholds')} />
           <div className="heatmap-grid">
             {Array.from({ length: 48 }).map((_, index) => (
               <span key={index} style={{ '--heat': (index * 17 + 31) % 100 }} />
@@ -1232,7 +1472,7 @@ function EnvironmentPage() {
           </div>
         </div>
         <div className="panel">
-          <PanelTitle icon={Thermometer} title="点位详情" action="趋势" />
+          <PanelTitle icon={Thermometer} title="点位详情" action="点位管理" onAction={() => setTab('points')} />
           <DataTable
             columns={['点位', '温度', '湿度', 'PM2.5', 'CO₂', '噪声', '状态']}
             rows={environmentPoints.map((item) => [
@@ -1270,6 +1510,7 @@ function EnvironmentPage() {
 
 function WorkOrdersPage() {
   const [editor, setEditor] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const { perform } = useRuntime();
   const statuses = ['待派单', '待处理', '处理中', '待验收'];
   return (
@@ -1286,21 +1527,21 @@ function WorkOrdersPage() {
               .filter((item) => item.status === status)
               .slice(0, 3)
               .map((item) => (
-                <div className="ticket-card" key={`${status}-${item.id}`}>
+                <button className="ticket-card" key={`${status}-${item.id}`} onClick={() => setSelectedOrder(item)}>
                   <strong>{item.title}</strong>
                   <span>{item.type} · {item.location}</span>
                   <div>
                     <Badge value={item.priority} />
                     <small>SLA {item.sla}</small>
                   </div>
-                </div>
+                </button>
               ))}
           </div>
         ))}
       </section>
       <section className="panel">
-        <PanelTitle icon={ClipboardList} title="工单明细" action="导出" />
-        <WorkorderTable />
+        <PanelTitle icon={ClipboardList} title="工单明细" action="导出" onAction={() => perform(() => downloadReport('workorders'), '工单报表已导出')} />
+        <WorkorderTable onView={setSelectedOrder} />
       </section>
       {editor && (
         <ResourceEditor
@@ -1319,6 +1560,7 @@ function WorkOrdersPage() {
           }}
         />
       )}
+      {selectedOrder && <WorkorderDetail item={selectedOrder} onClose={() => setSelectedOrder(null)} />}
     </ModuleScaffold>
   );
 }
@@ -1349,7 +1591,7 @@ function EnterprisePage() {
   );
 }
 
-function SpacePage() {
+function SpacePage({ setActive }) {
   const [tab, setTab] = useState('visual');
   const roomStates = roomAssets.map((item) => [item.room, item.state, item.enterprise, item.area]);
   return (
@@ -1364,7 +1606,7 @@ function SpacePage() {
       ]} />
       {tab === 'visual' && <section className="space-grid">
         <div className="panel">
-          <PanelTitle icon={Building2} title="空间资源树" action="定位" />
+          <PanelTitle icon={Building2} title="空间资源树" action="楼栋管理" onAction={() => setTab('buildings')} />
           <div className="resource-tree">
             <TreeNode label="科创产业园" open />
             {buildingStats.map((item) => (
@@ -1373,7 +1615,7 @@ function SpacePage() {
           </div>
         </div>
         <div className="panel">
-          <PanelTitle icon={MapPinned} title="租赁状态可视化" action="三维" />
+          <PanelTitle icon={MapPinned} title="租赁状态可视化" action="三维" onAction={() => setActive('twin')} />
           <div className="room-grid">
             {roomStates.map(([room, state]) => (
               <span className={`room-tile ${roomStateClass(state)}`} key={room}>
@@ -1425,7 +1667,7 @@ function AlarmsPage({ setActive, onSimulate, onAcknowledge, onCreateOrder, onClo
         <AlarmList onAcknowledge={onAcknowledge} onCreateOrder={onCreateOrder} onClose={onClose} />
       </section>}
       {tab === 'alarms' && <section className="panel">
-        <PanelTitle icon={SlidersHorizontal} title="联动规则示例" action="编辑" />
+        <PanelTitle icon={SlidersHorizontal} title="联动规则示例" action="编辑" onAction={() => setTab('rules')} />
         <ProcessFlow steps={['消防火警', '三维定位', '弹出摄像头', '通知消控室', '生成严重工单', '处置归档']} activeIndex={2} />
       </section>}
       {tab === 'rules' && <AlarmRuleManager />}
@@ -1683,7 +1925,7 @@ function EnvironmentPointManager() {
   );
 }
 
-function WorkorderTable() {
+function WorkorderTable({ onView }) {
   const { perform } = useRuntime();
   const next = {
     '待受理': ['待派单', '受理'],
@@ -1708,6 +1950,7 @@ function WorkorderTable() {
               <td><Badge value={item.priority} /></td><td><Badge value={item.status} /></td><td>{item.owner}</td><td>{item.sla}</td>
               <td>
                 <div className="table-actions">
+                  <button onClick={() => onView?.(item)}>查看</button>
                   {next[item.status] && (
                     <button onClick={() => perform(() => updateWorkorder(item.id, {
                       status: next[item.status][0],
@@ -1724,6 +1967,63 @@ function WorkorderTable() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function WorkorderDetail({ item, onClose }) {
+  const fallbackTimeline = [{
+    status: item.status,
+    user: item.createdBy || item.owner || '系统',
+    time: item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { hour12: false }) : '演示数据',
+    note: item.result || item.description || '工单已进入当前处理阶段'
+  }];
+  const timeline = item.timeline?.length ? item.timeline : fallbackTimeline;
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal-dialog workorder-detail-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">工单详情</p>
+            <h3>{item.title}</h3>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="关闭工单详情"><X size={17} /></button>
+        </div>
+        <div className="workorder-detail-grid">
+          <DetailField label="工单编号" value={item.id} />
+          <DetailField label="当前状态" value={<Badge value={item.status} />} />
+          <DetailField label="工单类型" value={item.type} />
+          <DetailField label="优先级" value={<Badge value={item.priority} />} />
+          <DetailField label="来源" value={item.source || '人工创建'} />
+          <DetailField label="处理人" value={item.owner || '未分配'} />
+          <DetailField label="所属位置" value={item.location || '-'} />
+          <DetailField label="SLA 截止" value={item.sla || '-'} />
+          <DetailField label="问题描述" value={item.description || '暂无补充描述'} wide />
+          <DetailField label="处理结果" value={item.result || '待处理完成后填写'} wide />
+        </div>
+        <section className="workorder-timeline">
+          <h4>流程时间轴</h4>
+          {timeline.map((entry, index) => (
+            <div key={`${entry.status}-${entry.time}-${index}`}>
+              <i />
+              <span>
+                <strong>{entry.status}</strong>
+                <small>{entry.user} · {entry.time}</small>
+                <p>{entry.note}</p>
+              </span>
+            </div>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function DetailField({ label, value, wide = false }) {
+  return (
+    <div className={wide ? 'wide' : ''}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

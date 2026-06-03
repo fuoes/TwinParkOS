@@ -73,9 +73,12 @@ npm run reset:dev-data
 ```powershell
 npm run build
 npm run test:api
+npm run test:e2e
 ```
 
-`test:api` 会验证登录、Bootstrap 数据、通用 CRUD、虚拟设备控制、场景仿真和报表导出。
+`test:api` 会验证登录、Bootstrap 数据、通用 CRUD、虚拟设备控制、场景仿真、权限边界、工单状态流转和报表导出。
+
+`test:e2e` 需要项目已经通过 `npm run dev:full` 启动，会使用本机 Chrome / Edge 验证登录、全局搜索、三维工具、工单详情、Canvas 渲染和移动端布局。也可以通过 `BROWSER_PATH` 指定 Chromium 可执行文件。
 
 ## 版本管理
 
