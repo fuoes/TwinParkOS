@@ -22,13 +22,17 @@ const resourceConfigs = {
   accessRecords: { read: 'security:read', manage: 'security:manage', prefix: 'ACC', required: ['person', 'gate'] },
   vehicles: { read: 'security:read', manage: 'security:manage', prefix: 'VEH', required: ['plate', 'owner'] },
   visitors: { read: 'security:read', manage: 'security:manage', prefix: 'VIS', required: ['name', 'enterprise'] },
+  environment: { read: 'environment:read', manage: 'environment:manage', prefix: 'ENV', required: ['name'] },
   environmentThresholds: { read: 'environment:read', manage: 'environment:manage', prefix: 'THR', required: ['metric', 'warning', 'alarm'] },
   enterprises: { read: 'enterprise:read', manage: 'enterprise:manage', prefix: 'ENT', required: ['name', 'industry'] },
   serviceRequests: { read: 'enterprise:read', manage: 'enterprise:manage', prefix: 'SR', required: ['enterprise', 'type', 'title'] },
   announcements: { read: 'enterprise:read', manage: 'enterprise:manage', prefix: 'ANN', required: ['title', 'category'] },
+  buildings: { read: 'space:read', manage: 'space:manage', prefix: 'BLD', required: ['name', 'floors'] },
   rooms: { read: 'space:read', manage: 'space:manage', prefix: 'ROOM', required: ['room', 'building'] },
   contracts: { read: 'space:read', manage: 'space:manage', prefix: 'CT', required: ['enterprise', 'rooms'] },
-  alarmRules: { read: 'alarm:read', manage: 'alarm:manage', prefix: 'RULE', required: ['name', 'source', 'condition'] }
+  alarmRules: { read: 'alarm:read', manage: 'alarm:manage', prefix: 'RULE', required: ['name', 'source', 'condition'] },
+  dataDictionaries: { read: 'system:manage', manage: 'system:manage', prefix: 'DICT', required: ['category', 'code', 'label'] },
+  integrations: { read: 'system:manage', manage: 'system:manage', prefix: 'INT', required: ['name', 'type'] }
 };
 
 const workorderTransitions = {
@@ -159,7 +163,7 @@ function dashboardKpis() {
   return [
     { label: '入驻企业', value: String(92 + store.enterprises.length), unit: '家', delta: '+8.4%', tone: 'good', target: 'enterprise' },
     { label: '空间出租率', value: occupancy, unit: '%', delta: '实时计算', tone: 'good', target: 'space' },
-    { label: '在线设备', value: onlineDevices.toLocaleString(), unit: '台', delta: `${((onlineDevices / store.devices.length) * 100).toFixed(1)}%`, tone: 'good', target: 'devices' },
+    { label: '在线设备', value: onlineDevices.toLocaleString(), unit: '台', delta: `${(store.devices.length ? (onlineDevices / store.devices.length) * 100 : 0).toFixed(1)}%`, tone: 'good', target: 'devices' },
     { label: '当前告警', value: String(openAlarms), unit: '条', delta: '实时更新', tone: 'warn', target: 'alarms' },
     { label: '今日用电', value: store.energyOverview.electricityToday.toLocaleString(), unit: 'kWh', delta: '+4.7%', tone: 'energy', target: 'energy' },
     { label: '待处理工单', value: String(openWorkorders), unit: '单', delta: 'SLA 监控中', tone: 'danger', target: 'workorders' },
@@ -199,6 +203,8 @@ function bootstrapPayload() {
     announcements: store.announcements,
     contracts: store.contracts,
     alarmRules: store.alarmRules,
+    dataDictionaries: store.dataDictionaries,
+    integrations: store.integrations,
     auditLogs: store.auditLogs,
     roles: store.roles.map(publicRole),
     users: store.users.map(publicUser),
@@ -650,12 +656,14 @@ function runScenario(scenario) {
   }
   if (scenario === 'fire') {
     const device = store.devices.find((item) => item.type === '消防设备');
+    if (!device) return { name: '消防火警', message: '当前没有消防虚拟设备，请先新增设备' };
     Object.assign(device, { online: '在线', status: '告警', alarm: '烟雾浓度超限', health: 65 });
     const alarm = createSimulatedAlarm({ type: '消防', level: '一级严重', source: device.name, location: device.area, deviceId: device.id, description: '虚拟消防火警场景触发' });
     return { name: '消防火警', message: '已触发消防火警与视频联动', alarm };
   }
   if (scenario === 'pump-fault') {
     const device = store.devices.find((item) => item.type === '暖通设备');
+    if (!device) return { name: '冷却泵故障', message: '当前没有暖通虚拟设备，请先新增设备' };
     Object.assign(device, { online: '在线', status: '故障', alarm: '轴温过高', health: 42, telemetry: { ...device.telemetry, temperature: 82.6 } });
     const alarm = createSimulatedAlarm({ type: '设备', level: '二级紧急', source: device.name, location: device.area, deviceId: device.id, description: '虚拟冷却泵故障场景触发' });
     return { name: '冷却泵故障', message: '已触发暖通设备故障', alarm };
@@ -745,8 +753,8 @@ const simulatorTimer = setInterval(() => {
   broadcast({
     type: 'telemetry:update',
     payload: {
-      device: { id: store.devices[0].id, telemetry: store.devices[0].telemetry },
-      environment: store.environment[0],
+      device: store.devices[0] ? { id: store.devices[0].id, telemetry: store.devices[0].telemetry } : null,
+      environment: store.environment[0] || null,
       energyOverview: store.energyOverview,
       at: nowIso()
     }

@@ -1,6 +1,6 @@
 {
-  "name": "twin-park-os-prototype",
-  "version": "0.1.0",
+  "name": "twin-park-os",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {

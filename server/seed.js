@@ -176,6 +176,17 @@ export function createSeedData() {
       { id: 'RULE-HVAC-001', name: '冷却泵高温告警', source: '暖通设备', condition: '轴温 > 75℃ 持续 5 分钟', level: '二级紧急', actions: '通知物业、生成工单', enabled: true },
       { id: 'RULE-ENERGY-001', name: '非工作时间高能耗', source: '能耗表计', condition: '高于历史均值 20%', level: '三级一般', actions: '通知能源管理员', enabled: true }
     ],
+    dataDictionaries: [
+      { id: 'DICT-DEVICE-001', category: '设备类型', code: 'power_distribution', label: '配电设备', value: '配电设备', enabled: true },
+      { id: 'DICT-ALARM-001', category: '告警等级', code: 'level_1', label: '一级严重', value: '一级严重', enabled: true },
+      { id: 'DICT-WO-001', category: '工单状态', code: 'processing', label: '处理中', value: '处理中', enabled: true },
+      { id: 'DICT-SPACE-001', category: '空间状态', code: 'leased', label: '已租', value: '已租', enabled: true }
+    ],
+    integrations: [
+      { id: 'INT-MQTT-001', name: '虚拟 MQTT 设备网关', type: 'MQTT', mode: '虚拟仿真', status: '在线', endpoint: 'mqtt://virtual-broker/twinpark', lastSync: '实时' },
+      { id: 'INT-VIDEO-001', name: '虚拟视频平台', type: 'GB28181', mode: '虚拟仿真', status: '在线', endpoint: 'virtual://video-platform', lastSync: '实时' },
+      { id: 'INT-ACCESS-001', name: '虚拟门禁平台', type: 'HTTP API', mode: '虚拟仿真', status: '在线', endpoint: 'virtual://access-control', lastSync: '实时' }
+    ],
     auditLogs: [
       { id: 'LOG-001', user: '平台管理员', action: '登录系统', module: '认证', detail: '管理员登录运营中心', time: '2026-06-03 08:30' },
       { id: 'LOG-002', user: '运营中心', action: '查看驾驶舱', module: '首页', detail: '查看园区运行态势', time: '2026-06-03 08:35' }

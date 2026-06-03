@@ -100,6 +100,30 @@ export const energyOverview = {
   energyPerSquareMeter: 0.42
 };
 
+export const inspections = [];
+export const maintenancePlans = [];
+export const energyBills = [];
+export const cameras = [];
+export const accessRecords = [];
+export const vehicles = [];
+export const visitors = [];
+export const environmentThresholds = [];
+export const serviceRequests = [];
+export const announcements = [];
+export const contracts = [];
+export const alarmRules = [];
+export const dataDictionaries = [];
+export const integrations = [];
+export const auditLogs = [];
+export const systemUsers = [];
+export const systemRoles = [];
+export const simulatorState = {
+  enabled: true,
+  speed: 1,
+  autoAlarm: false,
+  scenario: '日常运营'
+};
+
 function replaceItems(target, source) {
   if (!Array.isArray(source)) return;
   target.splice(0, target.length, ...source);
@@ -116,7 +140,25 @@ export function hydrateData(payload) {
   replaceItems(trendData, payload.energySeries);
   replaceItems(energyRanking, payload.energyRanking);
   replaceItems(roomAssets, payload.rooms);
+  replaceItems(inspections, payload.inspections);
+  replaceItems(maintenancePlans, payload.maintenancePlans);
+  replaceItems(energyBills, payload.energyBills);
+  replaceItems(cameras, payload.cameras);
+  replaceItems(accessRecords, payload.accessRecords);
+  replaceItems(vehicles, payload.vehicles);
+  replaceItems(visitors, payload.visitors);
+  replaceItems(environmentThresholds, payload.environmentThresholds);
+  replaceItems(serviceRequests, payload.serviceRequests);
+  replaceItems(announcements, payload.announcements);
+  replaceItems(contracts, payload.contracts);
+  replaceItems(alarmRules, payload.alarmRules);
+  replaceItems(dataDictionaries, payload.dataDictionaries);
+  replaceItems(integrations, payload.integrations);
+  replaceItems(auditLogs, payload.auditLogs);
+  replaceItems(systemUsers, payload.users);
+  replaceItems(systemRoles, payload.roles);
   if (payload.energyOverview) Object.assign(energyOverview, payload.energyOverview);
+  if (payload.simulator) Object.assign(simulatorState, payload.simulator);
 }
 
 export function applyRealtimeEvent(event) {
