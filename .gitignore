@@ -1,5 +1,8 @@
 node_modules/
 dist/
+release/
+release-desktop/
+release-portable/
 server/data/dev-db.json
 *.log
 verification-*.png

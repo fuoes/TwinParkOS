@@ -1,4 +1,4 @@
 import { resetStore } from './store.js';
 
-resetStore();
+await resetStore();
 console.log('TwinParkOS development data has been reset.');

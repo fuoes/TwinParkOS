@@ -3,17 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.mjs",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "node server/index.js",
     "dev:full": "concurrently -k -n API,WEB -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:desktop": "npm run build && electron .",
     "start:api": "node server/index.js",
     "reset:dev-data": "node server/reset-dev-data.js",
     "test:api": "node server/store-migration-test.js && node server/api-smoke-test.js",
     "test:e2e": "node tests/e2e-smoke.mjs",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "package:dir": "npm run build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --dir --win --x64",
+    "package:win": "npm run build && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --x64"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.4.1",
@@ -22,6 +26,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.468.0",
+    "mysql2": "^3.22.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.164.1",
@@ -30,6 +35,36 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
     "playwright-core": "^1.60.0"
+  },
+  "build": {
+    "appId": "com.twinparkos.demo",
+    "productName": "TwinParkOS",
+    "artifactName": "${productName}-${version}-${arch}-portable.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "release-portable"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "package.json",
+      "!server/data/dev-db.json",
+      "!**/*.log"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   }
 }

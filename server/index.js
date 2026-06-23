@@ -1,4 +1,6 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
@@ -7,6 +9,7 @@ import { WebSocketServer } from 'ws';
 import { resetStore, saveStore, store } from './store.js';
 
 const PORT = Number(process.env.API_PORT || 3001);
+const HOST = process.env.API_HOST || '0.0.0.0';
 const JWT_SECRET = process.env.JWT_SECRET || 'twinpark-local-development-secret';
 const app = express();
 
@@ -613,10 +616,10 @@ app.post('/api/simulator/scenarios/:scenario', authenticate, permit('device:mana
   return res.json({ item: result });
 });
 
-app.post('/api/system/reset-demo', authenticate, permit('system:manage'), (req, res) => {
-  resetStore();
+app.post('/api/system/reset-demo', authenticate, permit('system:manage'), async (req, res) => {
+  await resetStore();
   audit(req.user, '重置演示数据', '系统管理', '恢复全部初始虚拟演示数据');
-  saveStore();
+  await saveStore();
   broadcast({ type: 'demo:reset', payload: { at: nowIso() } });
   return res.json({ message: '演示数据已恢复' });
 });
@@ -644,7 +647,18 @@ app.get('/api/reports/:type/export', authenticate, permit('report:read'), (req, 
   return res.send(`\uFEFF${csv}`);
 });
 
-const server = http.createServer(app);
+if (process.env.TWINPARK_STATIC_DIR) {
+  const staticDirectory = path.resolve(process.env.TWINPARK_STATIC_DIR);
+  const indexHtml = path.join(staticDirectory, 'index.html');
+  app.use(express.static(staticDirectory));
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
+    if (!fs.existsSync(indexHtml)) return res.status(404).send('TwinParkOS static files were not found.');
+    return res.sendFile(indexHtml);
+  });
+}
+
+export const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 function broadcast(message) {
@@ -772,8 +786,14 @@ const simulatorTimer = setInterval(() => {
   if (tick % 8 === 0) saveStore();
 }, 5000);
 
-server.listen(PORT, () => {
-  console.log(`TwinParkOS API listening on http://localhost:${PORT}`);
+export const listening = new Promise((resolve, reject) => {
+  server.once('error', reject);
+  server.listen(PORT, HOST, () => {
+    const address = server.address();
+    const actualPort = typeof address === 'object' && address ? address.port : PORT;
+    console.log(`TwinParkOS API listening on http://${HOST}:${actualPort}`);
+    resolve(address);
+  });
 });
 
 function shutdown() {
