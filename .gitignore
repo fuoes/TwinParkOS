@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.env
+.env.*
+!.env.mysql.example
 release/
 release-desktop/
 release-portable/

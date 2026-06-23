@@ -6,7 +6,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { WebSocketServer } from 'ws';
-import { resetStore, saveStore, store } from './store.js';
+import { flushStore, resetStore, saveStore, storageInfo, store } from './store.js';
 
 const PORT = Number(process.env.API_PORT || 3001);
 const HOST = process.env.API_HOST || '0.0.0.0';
@@ -157,8 +157,8 @@ function audit(user, action, module, detail) {
   store.auditLogs = store.auditLogs.slice(0, 500);
 }
 
-function persistAndBroadcast(type, payload) {
-  saveStore();
+async function persistAndBroadcast(type, payload) {
+  await saveStore();
   broadcast({ type, payload });
 }
 
@@ -264,10 +264,10 @@ function createWorkorderFromAlarm(alarm, user) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'twinpark-api', mode: 'virtual-demo', now: nowIso() });
+  res.json({ status: 'ok', service: 'twinpark-api', mode: 'virtual-demo', storage: storageInfo, now: nowIso() });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   const user = store.users.find((item) => item.username === username && item.enabled);
   if (!user || !bcrypt.compareSync(password || '', user.passwordHash)) {
@@ -275,7 +275,7 @@ app.post('/api/auth/login', (req, res) => {
   }
   user.lastLoginAt = nowIso();
   audit(publicUser(user), '登录系统', '认证', `${user.name} 登录运营中心`);
-  saveStore();
+  await saveStore();
   return res.json({ token: signToken(user), user: publicUser(user) });
 });
 
@@ -298,7 +298,7 @@ app.get('/api/resources/:resource', authenticate, (req, res) => {
   return res.json({ items: store[req.params.resource] });
 });
 
-app.post('/api/resources/:resource', authenticate, (req, res) => {
+app.post('/api/resources/:resource', authenticate, async (req, res) => {
   const resource = req.params.resource;
   const config = resourceConfigs[resource];
   const collection = store[resource];
@@ -314,11 +314,11 @@ app.post('/api/resources/:resource', authenticate, (req, res) => {
   };
   collection.unshift(item);
   audit(req.user, '新增', resource, `新增 ${item.name || item.title || item.id}`);
-  persistAndBroadcast(`${resource}:created`, item);
+  await persistAndBroadcast(`${resource}:created`, item);
   return res.status(201).json({ item });
 });
 
-app.patch('/api/resources/:resource/:id', authenticate, (req, res) => {
+app.patch('/api/resources/:resource/:id', authenticate, async (req, res) => {
   const resource = req.params.resource;
   const config = resourceConfigs[resource];
   const collection = store[resource];
@@ -328,11 +328,11 @@ app.patch('/api/resources/:resource/:id', authenticate, (req, res) => {
   if (!item) return res.status(404).json({ message: '记录不存在' });
   Object.assign(item, req.body, { id: item.id, updatedAt: nowIso(), updatedBy: req.user.name });
   audit(req.user, '编辑', resource, `编辑 ${item.name || item.title || item.id}`);
-  persistAndBroadcast(`${resource}:updated`, item);
+  await persistAndBroadcast(`${resource}:updated`, item);
   return res.json({ item });
 });
 
-app.delete('/api/resources/:resource/:id', authenticate, (req, res) => {
+app.delete('/api/resources/:resource/:id', authenticate, async (req, res) => {
   const resource = req.params.resource;
   const config = resourceConfigs[resource];
   const collection = store[resource];
@@ -342,11 +342,11 @@ app.delete('/api/resources/:resource/:id', authenticate, (req, res) => {
   if (index < 0) return res.status(404).json({ message: '记录不存在' });
   const [item] = collection.splice(index, 1);
   audit(req.user, '删除', resource, `删除 ${item.name || item.title || item.id}`);
-  persistAndBroadcast(`${resource}:deleted`, { id: item.id });
+  await persistAndBroadcast(`${resource}:deleted`, { id: item.id });
   return res.json({ item });
 });
 
-app.post('/api/devices/:deviceId/control', authenticate, permit('device:manage'), (req, res) => {
+app.post('/api/devices/:deviceId/control', authenticate, permit('device:manage'), async (req, res) => {
   const device = store.devices.find((item) => item.id === req.params.deviceId);
   if (!device) return res.status(404).json({ message: '设备不存在' });
   const action = req.body?.action;
@@ -371,7 +371,7 @@ app.post('/api/devices/:deviceId/control', authenticate, permit('device:manage')
     });
   }
   audit(req.user, '虚拟控制', '设备运维', `${device.name} 执行 ${action}`);
-  saveStore();
+  await saveStore();
   broadcast({ type: 'device:updated', payload: device });
   if (alarm) broadcast({ type: 'alarm:new', payload: alarm });
   return res.json({ item: device, alarm });
@@ -381,18 +381,18 @@ app.get('/api/alarms', authenticate, permit('alarm:read'), (_req, res) => {
   res.json({ items: store.alarms });
 });
 
-app.post('/api/alarms/:alarmId/acknowledge', authenticate, permit('alarm:manage'), (req, res) => {
+app.post('/api/alarms/:alarmId/acknowledge', authenticate, permit('alarm:manage'), async (req, res) => {
   const alarm = store.alarms.find((item) => item.id === req.params.alarmId);
   if (!alarm) return res.status(404).json({ message: '告警不存在' });
   alarm.status = '已确认';
   alarm.acknowledgedBy = req.user.name;
   alarm.acknowledgedAt = nowIso();
   audit(req.user, '确认告警', '告警中心', `${alarm.id} ${alarm.source}`);
-  persistAndBroadcast('alarm:updated', alarm);
+  await persistAndBroadcast('alarm:updated', alarm);
   return res.json({ item: alarm });
 });
 
-app.post('/api/alarms/:alarmId/close', authenticate, permit('alarm:manage'), (req, res) => {
+app.post('/api/alarms/:alarmId/close', authenticate, permit('alarm:manage'), async (req, res) => {
   const alarm = store.alarms.find((item) => item.id === req.params.alarmId);
   if (!alarm) return res.status(404).json({ message: '告警不存在' });
   alarm.status = '已关闭';
@@ -400,16 +400,16 @@ app.post('/api/alarms/:alarmId/close', authenticate, permit('alarm:manage'), (re
   alarm.closedAt = nowIso();
   alarm.result = req.body?.result || '已核查并关闭';
   audit(req.user, '关闭告警', '告警中心', `${alarm.id} ${alarm.source}`);
-  persistAndBroadcast('alarm:updated', alarm);
+  await persistAndBroadcast('alarm:updated', alarm);
   return res.json({ item: alarm });
 });
 
-app.post('/api/alarms/:alarmId/workorders', authenticate, permit('workorder:manage'), (req, res) => {
+app.post('/api/alarms/:alarmId/workorders', authenticate, permit('workorder:manage'), async (req, res) => {
   const alarm = store.alarms.find((item) => item.id === req.params.alarmId);
   if (!alarm) return res.status(404).json({ message: '告警不存在' });
   const { order, reused } = createWorkorderFromAlarm(alarm, req.user);
   audit(req.user, '生成工单', '告警中心', `${alarm.id} 生成 ${order.id}`);
-  saveStore();
+  await saveStore();
   broadcast({ type: 'workorder:created', payload: order });
   broadcast({ type: 'alarm:updated', payload: alarm });
   return res.status(reused ? 200 : 201).json({ item: order, reused });
@@ -419,7 +419,7 @@ app.get('/api/workorders', authenticate, permit('workorder:read'), (_req, res) =
   res.json({ items: store.workorders });
 });
 
-app.post('/api/workorders', authenticate, permit('workorder:manage'), (req, res) => {
+app.post('/api/workorders', authenticate, permit('workorder:manage'), async (req, res) => {
   const body = req.body || {};
   const missing = validateRequired(body, ['title', 'type']);
   if (missing.length) return res.status(400).json({ message: '工单标题和类型不能为空' });
@@ -440,11 +440,11 @@ app.post('/api/workorders', authenticate, permit('workorder:manage'), (req, res)
   };
   store.workorders.unshift(order);
   audit(req.user, '新增工单', '物业工单', `${order.id} ${order.title}`);
-  persistAndBroadcast('workorder:created', order);
+  await persistAndBroadcast('workorder:created', order);
   return res.status(201).json({ item: order });
 });
 
-app.patch('/api/workorders/:orderId', authenticate, permit('workorder:manage'), (req, res) => {
+app.patch('/api/workorders/:orderId', authenticate, permit('workorder:manage'), async (req, res) => {
   const order = store.workorders.find((item) => item.id === req.params.orderId);
   if (!order) return res.status(404).json({ message: '工单不存在' });
   const nextStatus = req.body?.status;
@@ -475,7 +475,7 @@ app.patch('/api/workorders/:orderId', authenticate, permit('workorder:manage'), 
     }
   }
   audit(req.user, '更新工单', '物业工单', `${order.id} 更新为 ${order.status}`);
-  persistAndBroadcast('workorder:updated', order);
+  await persistAndBroadcast('workorder:updated', order);
   return res.json({ item: order });
 });
 
@@ -499,7 +499,7 @@ app.get('/api/users', authenticate, permit('system:manage'), (_req, res) => {
   res.json({ items: store.users.map(publicUser) });
 });
 
-app.post('/api/users', authenticate, permit('system:manage'), (req, res) => {
+app.post('/api/users', authenticate, permit('system:manage'), async (req, res) => {
   const body = req.body || {};
   const missing = validateRequired(body, ['username', 'name', 'password', 'roleId']);
   if (missing.length) return res.status(400).json({ message: `缺少必填字段：${missing.join('、')}` });
@@ -516,11 +516,11 @@ app.post('/api/users', authenticate, permit('system:manage'), (req, res) => {
   };
   store.users.push(user);
   audit(req.user, '新增用户', '系统管理', `${user.username} ${user.name}`);
-  saveStore();
+  await saveStore();
   return res.status(201).json({ item: publicUser(user) });
 });
 
-app.patch('/api/users/:userId', authenticate, permit('system:manage'), (req, res) => {
+app.patch('/api/users/:userId', authenticate, permit('system:manage'), async (req, res) => {
   const user = store.users.find((item) => item.id === req.params.userId);
   if (!user) return res.status(404).json({ message: '用户不存在' });
   ['name', 'roleId', 'department', 'enabled'].forEach((key) => {
@@ -528,17 +528,17 @@ app.patch('/api/users/:userId', authenticate, permit('system:manage'), (req, res
   });
   if (req.body?.password) user.passwordHash = bcrypt.hashSync(req.body.password, 10);
   audit(req.user, '编辑用户', '系统管理', `${user.username} ${user.name}`);
-  saveStore();
+  await saveStore();
   return res.json({ item: publicUser(user) });
 });
 
-app.delete('/api/users/:userId', authenticate, permit('system:manage'), (req, res) => {
+app.delete('/api/users/:userId', authenticate, permit('system:manage'), async (req, res) => {
   if (req.params.userId === req.user.id) return res.status(400).json({ message: '不能删除当前登录用户' });
   const index = store.users.findIndex((item) => item.id === req.params.userId);
   if (index < 0) return res.status(404).json({ message: '用户不存在' });
   const [user] = store.users.splice(index, 1);
   audit(req.user, '删除用户', '系统管理', `${user.username} ${user.name}`);
-  saveStore();
+  await saveStore();
   return res.json({ item: publicUser(user) });
 });
 
@@ -546,7 +546,7 @@ app.get('/api/roles', authenticate, permit('system:manage'), (_req, res) => {
   res.json({ items: store.roles.map(publicRole) });
 });
 
-app.post('/api/roles', authenticate, permit('system:manage'), (req, res) => {
+app.post('/api/roles', authenticate, permit('system:manage'), async (req, res) => {
   const body = req.body || {};
   if (!body.name) return res.status(400).json({ message: '角色名称不能为空' });
   const role = {
@@ -557,28 +557,28 @@ app.post('/api/roles', authenticate, permit('system:manage'), (req, res) => {
   };
   store.roles.push(role);
   audit(req.user, '新增角色', '系统管理', role.name);
-  saveStore();
+  await saveStore();
   return res.status(201).json({ item: publicRole(role) });
 });
 
-app.patch('/api/roles/:roleId', authenticate, permit('system:manage'), (req, res) => {
+app.patch('/api/roles/:roleId', authenticate, permit('system:manage'), async (req, res) => {
   const role = store.roles.find((item) => item.id === req.params.roleId);
   if (!role) return res.status(404).json({ message: '角色不存在' });
   ['name', 'menus', 'permissions'].forEach((key) => {
     if (req.body?.[key] !== undefined) role[key] = req.body[key];
   });
   audit(req.user, '编辑角色', '系统管理', role.name);
-  saveStore();
+  await saveStore();
   return res.json({ item: publicRole(role) });
 });
 
-app.delete('/api/roles/:roleId', authenticate, permit('system:manage'), (req, res) => {
+app.delete('/api/roles/:roleId', authenticate, permit('system:manage'), async (req, res) => {
   if (store.users.some((item) => item.roleId === req.params.roleId)) return res.status(400).json({ message: '角色仍有关联用户，不能删除' });
   const index = store.roles.findIndex((item) => item.id === req.params.roleId);
   if (index < 0) return res.status(404).json({ message: '角色不存在' });
   const [role] = store.roles.splice(index, 1);
   audit(req.user, '删除角色', '系统管理', role.name);
-  saveStore();
+  await saveStore();
   return res.json({ item: publicRole(role) });
 });
 
@@ -586,10 +586,10 @@ app.get('/api/audit-logs', authenticate, permit('system:manage'), (_req, res) =>
   res.json({ items: store.auditLogs });
 });
 
-app.post('/api/simulator/alarms', authenticate, permit('alarm:manage'), (req, res) => {
+app.post('/api/simulator/alarms', authenticate, permit('alarm:manage'), async (req, res) => {
   const alarm = createSimulatedAlarm(req.body);
   audit(req.user, '模拟告警', '虚拟仿真', `${alarm.type} ${alarm.source}`);
-  persistAndBroadcast('alarm:new', alarm);
+  await persistAndBroadcast('alarm:new', alarm);
   return res.status(201).json({ item: alarm });
 });
 
@@ -597,21 +597,21 @@ app.get('/api/simulator/status', authenticate, (_req, res) => {
   res.json({ item: store.simulator });
 });
 
-app.patch('/api/simulator/status', authenticate, permit('device:manage'), (req, res) => {
+app.patch('/api/simulator/status', authenticate, permit('device:manage'), async (req, res) => {
   Object.assign(store.simulator, req.body || {}, { updatedAt: nowIso() });
   audit(req.user, '配置仿真器', '虚拟仿真', JSON.stringify(req.body || {}));
-  persistAndBroadcast('simulator:updated', store.simulator);
+  await persistAndBroadcast('simulator:updated', store.simulator);
   return res.json({ item: store.simulator });
 });
 
-app.post('/api/simulator/scenarios/:scenario', authenticate, permit('device:manage'), (req, res) => {
+app.post('/api/simulator/scenarios/:scenario', authenticate, permit('device:manage'), async (req, res) => {
   const scenario = req.params.scenario;
   const result = runScenario(scenario);
   if (!result) return res.status(400).json({ message: '不支持的虚拟场景' });
   store.simulator.scenario = result.name;
   store.simulator.lastScenarioAt = nowIso();
   audit(req.user, '运行场景', '虚拟仿真', result.name);
-  saveStore();
+  await saveStore();
   broadcast({ type: 'scenario:ran', payload: result });
   return res.json({ item: result });
 });
@@ -636,11 +636,11 @@ app.get('/api/reports/summary', authenticate, permit('report:read'), (_req, res)
   });
 });
 
-app.get('/api/reports/:type/export', authenticate, permit('report:read'), (req, res) => {
+app.get('/api/reports/:type/export', authenticate, permit('report:read'), async (req, res) => {
   const report = reportData(req.params.type);
   if (!report) return res.status(404).json({ message: '报表类型不存在' });
   audit(req.user, '导出报表', '报表中心', report.name);
-  saveStore();
+  await saveStore();
   const csv = toCsv(report.columns, report.rows);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(report.fileName)}"`);
@@ -783,7 +783,7 @@ const simulatorTimer = setInterval(() => {
     const alarm = createSimulatedAlarm();
     broadcast({ type: 'alarm:new', payload: alarm });
   }
-  if (tick % 8 === 0) saveStore();
+  if (tick % 8 === 0) saveStore().catch((error) => console.error('Failed to persist simulator state:', error));
 }, 5000);
 
 export const listening = new Promise((resolve, reject) => {
@@ -796,9 +796,10 @@ export const listening = new Promise((resolve, reject) => {
   });
 });
 
-function shutdown() {
+async function shutdown() {
   clearInterval(simulatorTimer);
-  saveStore();
+  await saveStore();
+  await flushStore();
   server.close(() => process.exit(0));
 }
 

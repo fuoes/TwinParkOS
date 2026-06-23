@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { migrateStoreData } from './store.js';
+
+process.env.TWINPARK_STORAGE = 'json';
+const { migrateStoreData } = await import('./store.js');
 
 const legacy = {
   meta: {

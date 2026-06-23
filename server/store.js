@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,10 @@ import { createSeedData } from './seed.js';
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const dataDirectory = process.env.TWINPARK_DATA_DIR || path.join(directory, 'data');
 const databaseFile = path.join(dataDirectory, 'dev-db.json');
-const storageDriver = (process.env.TWINPARK_STORAGE || 'json').toLowerCase();
+const storageDriver = (process.env.TWINPARK_STORAGE || 'mysql').toLowerCase();
+if (!['mysql', 'json'].includes(storageDriver)) {
+  throw new Error(`Unsupported TWINPARK_STORAGE value: ${storageDriver}`);
+}
 const useMysql = storageDriver === 'mysql';
 const mysqlStoreId = process.env.MYSQL_STORE_ID || 'main';
 const mysqlConfig = {
@@ -20,7 +24,20 @@ const mysqlConfig = {
   timezone: 'Z',
   multipleStatements: false
 };
+if (!/^[A-Za-z0-9_]+$/.test(mysqlConfig.database)) {
+  throw new Error('MYSQL_DATABASE may only contain letters, numbers, and underscores.');
+}
 let mysqlPool;
+let saveQueue = Promise.resolve();
+
+export const storageInfo = Object.freeze(useMysql
+  ? {
+      driver: 'mysql',
+      host: mysqlConfig.host,
+      port: mysqlConfig.port,
+      database: mysqlConfig.database
+    }
+  : { driver: 'json', file: databaseFile });
 
 function ensureDataDirectory() {
   fs.mkdirSync(dataDirectory, { recursive: true });
@@ -145,7 +162,13 @@ async function load() {
 }
 
 export const store = await load();
-export const saveStore = () => persist(store);
+export function saveStore() {
+  const snapshot = structuredClone(store);
+  saveQueue = saveQueue.catch(() => undefined).then(() => persist(snapshot));
+  return saveQueue;
+}
+
+export const flushStore = () => saveQueue;
 
 export async function resetStore() {
   const fresh = createSeedData();

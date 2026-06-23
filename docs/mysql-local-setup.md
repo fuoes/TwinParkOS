@@ -1,7 +1,6 @@
 # TwinParkOS 本地 MySQL 配置说明
 
-当前项目默认仍可使用 `server/data/dev-db.json` 作为零配置演示数据源。
-如果需要改用本地 MySQL，请按下面方式启动。
+当前项目正式运行默认使用本地 MySQL。JSON 存储仅用于隔离测试或显式兼容模式。
 
 ## 1. 创建数据库和表
 
@@ -18,21 +17,15 @@ SOURCE D:/__easyHelper__/TwinParkOS/db/mysql-store-schema.sql;
 - 主键：`id`
 - 数据列：`data`，使用 `LONGTEXT` 保存完整业务状态 JSON 字符串，兼容 MySQL 5.5+
 
-## 2. 配置环境变量
+## 2. 配置 `.env`
 
-PowerShell 示例：
+复制配置模板：
 
 ```powershell
-$env:TWINPARK_STORAGE="mysql"
-$env:MYSQL_HOST="127.0.0.1"
-$env:MYSQL_PORT="3306"
-$env:MYSQL_USER="root"
-$env:MYSQL_PASSWORD="你的MySQL密码"
-$env:MYSQL_DATABASE="twinparkos"
-$env:MYSQL_STORE_ID="main"
+Copy-Item .env.mysql.example .env
 ```
 
-也可以复制根目录 `.env.mysql.example` 作为配置参考。
+打开 `.env`，将 `MYSQL_PASSWORD` 修改为本机 MySQL 密码。`.env` 已被 Git 忽略，不会提交账号密码。
 
 ## 3. 启动项目
 
@@ -47,18 +40,10 @@ npm run dev:full
 3. 如果表中没有数据，会从 `server/data/dev-db.json` 导入现有演示数据。
 4. 后续设备、告警、工单、企业、空间、能耗、用户和权限等业务状态会写入 MySQL。
 
-## 4. 恢复默认 JSON 模式
+## 4. 仅在测试中使用 JSON 模式
 
-关闭当前终端后重新打开，或执行：
-
-```powershell
-Remove-Item Env:TWINPARK_STORAGE -ErrorAction SilentlyContinue
-```
-
-再运行：
+需要临时运行隔离测试存储时，可显式设置：
 
 ```powershell
-npm run dev:full
+$env:TWINPARK_STORAGE="json"
 ```
-
-即可回到默认 JSON 文件持久化模式。
